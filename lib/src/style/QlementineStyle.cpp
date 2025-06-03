@@ -1639,35 +1639,61 @@ void QlementineStyle::drawControl(ControlElement ce, const QStyleOption* opt, QP
 
         // Icon.
         if (hasIcon) {
-          const auto pixmap = getPixmap(icon, iconSize, mouse, checked, w);
-          const auto& colorizedPixmap = getColorizedPixmap(pixmap, autoIconColor(w), fgColor, fgColor);
-          const auto pixmapPixelRatio = colorizedPixmap.devicePixelRatio();
-          const auto pixmapW = pixmapPixelRatio != 0 ? (int) ((qreal) colorizedPixmap.width() / pixmapPixelRatio) : 0;
-          const auto pixmapH = pixmapPixelRatio != 0 ? (int) ((qreal) colorizedPixmap.height() / pixmapPixelRatio) : 0;
-          const auto iconOnly = buttonStyle == Qt::ToolButtonIconOnly;
-          const auto pixmapX = iconOnly ? availableX + (availableW - pixmapW) / 2 : availableX;
-          const auto pixmapY = rect.y() + (rect.height() - pixmapH) / 2;
-          const auto pixmapRect = QRect{ pixmapX, pixmapY, pixmapW, pixmapH };
-          availableW -= pixmapW + spacing;
-          availableX += pixmapW + spacing;
-          p->drawPixmap(pixmapRect, colorizedPixmap);
-        }
+                        const auto pixmap = getPixmap(icon, iconSize, mouse, checked, w);
+                        const auto &colorizedPixmap = getColorizedPixmap(pixmap, autoIconColor(w), fgColor, fgColor);
+                        const auto pixmapW = colorizedPixmap.width() / colorizedPixmap.devicePixelRatio();
+                        const auto pixmapH = colorizedPixmap.height() / colorizedPixmap.devicePixelRatio();
 
-        // Text.
-        if (hasText && availableW > 0) {
-          const auto elidedText = fm.elidedText(optToolButton->text, Qt::ElideRight, availableW, Qt::TextSingleLine);
-          const auto elidedTextW = fm.boundingRect(optToolButton->rect, Qt::AlignCenter, elidedText).width();
-          const auto textRect = QRect{ availableX, fgRect.y(), elidedTextW, fgRect.height() };
-          int textFlags = Qt::AlignVCenter | Qt::AlignBaseline | Qt::TextSingleLine | Qt::TextHideMnemonic;
-          if (iconSize.isEmpty() || !showIcon) {
-            textFlags |= Qt::AlignHCenter;
-          } else {
-            textFlags |= Qt::AlignLeft;
-          }
-          p->setBrush(Qt::NoBrush);
-          p->setPen(fgColor);
-          p->drawText(textRect, textFlags, elidedText, nullptr);
-        }
+                        if (buttonStyle == Qt::ToolButtonTextUnderIcon && hasText) {
+                            // Layout vertically
+                            const auto totalH = pixmapH + spacing + fm.height();
+                            const auto pixmapX = rect.x() + (rect.width() - pixmapW) / 2;
+                            const auto pixmapY = rect.y() + (rect.height() - totalH) / 2;
+                            const auto pixmapRect = QRect{
+                                    static_cast<int>(pixmapX),
+                                    static_cast<int>(pixmapY),
+                                    static_cast<int>(pixmapW),
+                                    static_cast<int>(pixmapH)
+                            };
+
+                            const auto text = fm.elidedText(optToolButton->text, Qt::ElideRight, rect.width(), Qt::TextSingleLine);
+                            const auto textRect = QRect{
+                                    rect.x(), pixmapRect.bottom() + spacing,
+                                    rect.width(), fm.height()
+                            };
+
+                            p->drawPixmap(pixmapRect, colorizedPixmap);
+                            p->setPen(fgColor);
+                            p->drawText(textRect, Qt::AlignHCenter | Qt::AlignTop | Qt::TextSingleLine | Qt::TextHideMnemonic, text);
+                        } else {
+                            // Default icon beside text layout
+                            const auto pixmapX = availableX + (availableW - pixmapW) / 2;
+                            const auto pixmapY = rect.y() + (rect.height() - pixmapH) / 2;
+                            const auto pixmapRect = QRect{
+                                    static_cast<int>(pixmapX),
+                                    static_cast<int>(pixmapY),
+                                    static_cast<int>(pixmapW),
+                                    static_cast<int>(pixmapH)
+                            };
+
+                            availableW -= pixmapW + spacing;
+                            availableX += pixmapW + spacing;
+
+                            p->drawPixmap(pixmapRect, colorizedPixmap);
+                        }
+                    }
+                    // Text.
+                    if (hasText && buttonStyle != Qt::ToolButtonTextUnderIcon && availableW > 0) {
+                        const auto elidedText = fm.elidedText(optToolButton->text, Qt::ElideRight, availableW, Qt::TextSingleLine);
+                        const auto elidedTextW = fm.boundingRect(optToolButton->rect, Qt::AlignCenter, elidedText).width();
+                        const auto textRect = QRect{availableX, fgRect.y(), elidedTextW, fgRect.height()};
+
+                        int textFlags = Qt::AlignVCenter | Qt::AlignBaseline | Qt::TextSingleLine | Qt::TextHideMnemonic;
+                        textFlags |= (iconSize.isEmpty() || !showIcon) ? Qt::AlignHCenter : Qt::AlignLeft;
+
+                        p->setPen(fgColor);
+                        p->drawText(textRect, textFlags, elidedText, nullptr);
+                    }
       }
       return;
     case CE_Header:
@@ -3763,7 +3789,18 @@ QSize QlementineStyle::sizeFromContents(
             const auto w = iconSize.width() + spacing * 2 + menuIndicatorW;
             return QSize{ w, h };
           }
-          case Qt::ToolButtonStyle::ToolButtonTextUnderIcon: // Not handled
+          case Qt::ToolButtonStyle::ToolButtonTextUnderIcon: 
+           {
+                            const auto textW = optToolButton->fontMetrics.boundingRect(optToolButton->rect,
+                                                                                       Qt::AlignHCenter, // Use AlignHCenter as text is under icon
+                                                                                       optToolButton->text).width();
+                            const auto textH = optToolButton->fontMetrics.boundingRect(optToolButton->rect,
+                                                                                       Qt::AlignHCenter,
+                                                                                       optToolButton->text).height();
+                            const auto w = std::max(iconSize.width(), textW) + spacing * 2 + menuIndicatorW;
+                            const auto hUnderIcon = iconSize.height() + textH + spacing + spacing * 2; // Icon height + text height + spacing between them + padding
+                            return QSize{w, std::max(h, hUnderIcon)}; // Ensure minimum height is still met
+                        }
           case Qt::ToolButtonStyle::ToolButtonTextBesideIcon: {
             const auto iconW = iconSize.width();
             const auto textW =
