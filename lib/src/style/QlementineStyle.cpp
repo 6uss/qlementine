@@ -1645,26 +1645,27 @@ void QlementineStyle::drawControl(ControlElement ce, const QStyleOption* opt, QP
                         const auto pixmapH = colorizedPixmap.height() / colorizedPixmap.devicePixelRatio();
 
                         if (buttonStyle == Qt::ToolButtonTextUnderIcon && hasText) {
-                            // Layout vertically
-                            const auto totalH = pixmapH + spacing + fm.height();
-                            const auto pixmapX = rect.x() + (rect.width() - pixmapW) / 2;
-                            const auto pixmapY = rect.y() + (rect.height() - totalH) / 2;
-                            const auto pixmapRect = QRect{
-                                    static_cast<int>(pixmapX),
-                                    static_cast<int>(pixmapY),
-                                    static_cast<int>(pixmapW),
-                                    static_cast<int>(pixmapH)
-                            };
+                          // Layout vertically
+                          const auto totalH = pixmapH + spacing + fm.height();
+                          const auto pixmapX = rect.x() + (rect.width() - pixmapW) / 2;
+                          const auto pixmapY = rect.y() + (rect.height() - totalH) / 2;
+                          const auto pixmapRect = QRect{
+                              static_cast<int>(pixmapX),
+                              static_cast<int>(pixmapY),
+                              static_cast<int>(pixmapW),
+                              static_cast<int>(pixmapH)
+                          };
+                          
+                          const auto& text = optToolButton->text;
+                          const auto textRect = QRect{
+                              rect.x(), pixmapRect.bottom() + spacing,
+                              rect.width(), rect.bottom() - (pixmapRect.bottom() + spacing)
+                          };
+                          
+                          p->drawPixmap(pixmapRect, colorizedPixmap);
+                          p->setPen(fgColor);
+                          p->drawText(textRect, Qt::AlignHCenter | Qt::AlignTop | Qt::TextWordWrap | Qt::TextHideMnemonic, text);
 
-                            const auto text = fm.elidedText(optToolButton->text, Qt::ElideRight, rect.width(), Qt::TextSingleLine);
-                            const auto textRect = QRect{
-                                    rect.x(), pixmapRect.bottom() + spacing,
-                                    rect.width(), fm.height()
-                            };
-
-                            p->drawPixmap(pixmapRect, colorizedPixmap);
-                            p->setPen(fgColor);
-                            p->drawText(textRect, Qt::AlignHCenter | Qt::AlignTop | Qt::TextSingleLine | Qt::TextHideMnemonic, text);
                         } else {
                             // Default icon beside text layout
                             const auto pixmapX = availableX + (availableW - pixmapW) / 2;
