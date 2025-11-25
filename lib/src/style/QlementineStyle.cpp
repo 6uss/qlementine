@@ -32,6 +32,7 @@
 #include <QPixmapCache>
 #include <QApplication>
 #include <QMenuBar>
+#include <QToolBar>
 #include <QTableView>
 #include <QCheckBox>
 #include <QRadioButton>
@@ -257,7 +258,11 @@ QlementineStyle::QlementineStyle(QObject* parent)
   : _impl(new QlementineStyleImpl{ *this }) {
   setParent(parent);
   setObjectName(QStringLiteral("QlementineStyle"));
-  triggerCompleteRepaint();
+
+  // This method is virtual so it should not be called in the base class constructor.
+  QTimer::singleShot(0, this, [this]() {
+    triggerCompleteRepaint();
+  });
 }
 
 QlementineStyle::~QlementineStyle() = default;
@@ -563,18 +568,50 @@ void QlementineStyle::drawPrimitive(PrimitiveElement pe, const QStyleOption* opt
         const auto& rect = optToolBar->rect;
         p->fillRect(rect, bgColor);
 
-        // TODO Handle ToolBar when it's on left/right side, bottom + middle.
         const auto lineW = _impl->theme.borderWidth;
-        const auto x1 = rect.x();
-        const auto y1 = rect.y() + rect.height() - lineW / 2.;
-        const auto x2 = rect.x() + rect.width();
-        const auto y2 = y1;
-        const auto p1 = QPointF(x1, y1);
-        const auto p2 = QPointF(x2, y2);
         const auto& lineColor = toolBarBorderColor();
         p->setPen(QPen(lineColor, lineW, Qt::SolidLine, Qt::FlatCap));
         p->setBrush(Qt::NoBrush);
-        p->drawLine(p1, p2);
+
+        auto* toolBar = qobject_cast<const QToolBar*>(w);
+        const auto orientation = toolBar->orientation();
+        const auto allowedAreas = toolBar->allowedAreas();
+
+        if (orientation == Qt::Horizontal) {
+          if (allowedAreas.testFlag(Qt::TopToolBarArea)) {
+            // Draw bottom border
+            const auto x1 = rect.x();
+            const auto y1 = rect.y() + rect.height() - lineW / 2.;
+            const auto x2 = rect.x() + rect.width();
+            const auto y2 = y1;
+            p->drawLine(QPointF(x1, y1), QPointF(x2, y2));
+          }
+          if (allowedAreas.testFlag(Qt::BottomToolBarArea)) {
+            // Draw top border
+            const auto x1 = rect.x();
+            const auto y1 = rect.y() + lineW / 2.;
+            const auto x2 = rect.x() + rect.width();
+            const auto y2 = y1;
+            p->drawLine(QPointF(x1, y1), QPointF(x2, y2));
+          }
+        } else if (orientation == Qt::Vertical) {
+          if (allowedAreas.testFlag(Qt::LeftToolBarArea)) {
+            // Draw right border
+            const auto x1 = rect.x() + rect.width() - lineW / 2.;
+            const auto y1 = rect.y();
+            const auto x2 = x1;
+            const auto y2 = rect.y() + rect.height();
+            p->drawLine(QPointF(x1, y1), QPointF(x2, y2));
+          }
+          if (allowedAreas.testFlag(Qt::RightToolBarArea)) {
+            // Draw left border
+            const auto x1 = rect.x() + lineW / 2.;
+            const auto y1 = rect.y();
+            const auto x2 = x1;
+            const auto y2 = rect.y() + rect.height();
+            p->drawLine(QPointF(x1, y1), QPointF(x2, y2));
+          }
+        }
       }
       return;
     case PE_PanelLineEdit:
@@ -623,6 +660,8 @@ void QlementineStyle::drawPrimitive(PrimitiveElement pe, const QStyleOption* opt
         if (!isPlainLineEdit) {
           drawRoundedRectBorder(p, rect, currentBorderColor, borderW, radiuses);
         }
+        // Drawing the caret should be non-antialiased
+        p->setRenderHint(QPainter::Antialiasing, false);
       }
       return;
     case PE_IndicatorArrowDown:
@@ -4336,7 +4375,7 @@ int QlementineStyle::pixelMetric(PixelMetric m, const QStyleOption* opt, const Q
 
     // TreeView/TableView.
     case PM_TreeViewIndentation:
-      return int(_impl->theme.spacing * 2.5);
+      return static_cast<int>(_impl->theme.spacing * 2.5);
     case PM_HeaderMargin:
       return _impl->theme.spacing; // Header horizontal padding.
     case PM_HeaderMarkSize:
@@ -4806,7 +4845,7 @@ void QlementineStyle::polish(QWidget* w) {
   }
 
   // Try to remove the background...
-  if (auto* itemView = qobject_cast<QListView*>(w)) {
+  if (auto* itemView = qobject_cast<QAbstractItemView*>(w)) {
     auto* popup = itemView->parentWidget();
     auto isComboBoxPopupContainer = popup && popup->inherits("QComboBoxPrivateContainer");
     if (isComboBoxPopupContainer) {
@@ -4825,7 +4864,7 @@ void QlementineStyle::polish(QWidget* w) {
 
       itemView->viewport()->setAutoFillBackground(false);
       auto* comboBox = findFirstParentOfType<QComboBox>(itemView);
-      itemView->installEventFilter(new ComboboxItemViewFilter(comboBox, itemView));
+      new ComboboxItemViewFilter(comboBox, itemView);
     }
   }
 
@@ -4854,10 +4893,14 @@ void QlementineStyle::polish(QWidget* w) {
   }
 
   if (auto* comboBox = qobject_cast<QComboBox*>(w)) {
-    comboBox->setItemDelegate(new ComboBoxDelegate(comboBox, *this));
     comboBox->setSizeAdjustPolicy(QComboBox::SizeAdjustPolicy::AdjustToContents);
+
+    // Will define a delegate to stylize the QComboBox items,
+    comboBox->setItemDelegate(new ComboBoxDelegate(comboBox, *this));
+    // Trigger the redefine when the QComboBox's view changes.
+    new ComboboxFilter(comboBox);
   } else if (auto* tabBar = qobject_cast<QTabBar*>(w)) {
-    tabBar->installEventFilter(new TabBarEventFilter(*this, tabBar));
+    tabBar->installEventFilter(new TabBarEventFilter(tabBar));
   } else if (auto* label = qobject_cast<QLabel*>(w)) {
     const auto labelObjName = label->objectName();
     const auto isInformativeLabel = labelObjName == QStringLiteral("qt_msgbox_informativelabel");
@@ -6057,7 +6100,7 @@ QColor const& QlementineStyle::switchGrooveBorderColor(
 }
 
 QColor const& QlementineStyle::switchHandleColor(MouseState const mouse, CheckState const checked) const {
-  const auto primary = checked == CheckState::Checked;
+  const auto primary = checked != CheckState::NotChecked;
 
   switch (mouse) {
     case MouseState::Pressed:

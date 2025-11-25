@@ -259,6 +259,88 @@ struct SandboxWindow::Impl {
     owner.setCentralWidget(globalScrollArea);
   }
 
+  void setupUI_toolBar() {
+    auto addToolBarIcon = [](QToolBar* toolbar, int btnNum = 1) {
+      const auto icon = getTestQIcon();
+      for (int i = 0; i < btnNum; i++) {
+        auto* toolButton = new QToolButton(toolbar);
+        toolButton->setIcon(icon);
+        toolButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
+        toolbar->addWidget(toolButton);
+      }
+    };
+
+    auto* contentWidget = new CustomBgWidget(windowContent);
+    windowContentLayout->addWidget(contentWidget);
+
+    contentWidget->showBounds = true;
+    contentWidget->bgColor = Qt::white;
+
+    contentWidget->setMinimumSize(500, 400);
+    auto* contentLayout = new QHBoxLayout(contentWidget);
+    contentLayout->setContentsMargins(1, 1, 1, 1);
+    contentLayout->setSpacing(0);
+
+    {
+      auto* leftToolBar = new QToolBar(contentWidget);
+      contentLayout->addWidget(leftToolBar);
+      leftToolBar->setOrientation(Qt::Orientation::Vertical);
+      leftToolBar->setAllowedAreas(Qt::ToolBarArea::LeftToolBarArea);
+      addToolBarIcon(leftToolBar, 3);
+    }
+
+    {
+      auto* centralWidget = new QWidget(contentWidget);
+      contentLayout->addWidget(centralWidget);
+      auto* layout = new QVBoxLayout(centralWidget);
+      layout->setContentsMargins(0, 0, 0, 0);
+      layout->setSpacing(0);
+
+      {
+        auto* topToolBar = new QToolBar(centralWidget);
+        layout->addWidget(topToolBar);
+        topToolBar->setOrientation(Qt::Orientation::Horizontal);
+        topToolBar->setAllowedAreas(Qt::ToolBarArea::TopToolBarArea);
+        addToolBarIcon(topToolBar, 4);
+      }
+      {
+        auto* widget = new CustomBgWidget(centralWidget);
+        layout->addWidget(widget);
+        widget->showBounds = false;
+        widget->bgColor = Qt::white;
+      }
+      {
+        auto* middleToolbar = new QToolBar(centralWidget);
+        layout->addWidget(middleToolbar);
+        middleToolbar->setOrientation(Qt::Orientation::Horizontal);
+        middleToolbar->setAllowedAreas(Qt::ToolBarArea::TopToolBarArea | Qt::ToolBarArea::BottomToolBarArea);
+        addToolBarIcon(middleToolbar, 3);
+      }
+      {
+        auto* widget = new CustomBgWidget(centralWidget);
+        layout->addWidget(widget);
+        widget->showBounds = false;
+        widget->bgColor = Qt::white;
+        widget->setStyleSheet("background-color: white");
+      }
+      {
+        auto* bottomToolBar = new QToolBar(centralWidget);
+        layout->addWidget(bottomToolBar);
+        bottomToolBar->setOrientation(Qt::Orientation::Horizontal);
+        bottomToolBar->setAllowedAreas(Qt::ToolBarArea::BottomToolBarArea);
+        addToolBarIcon(bottomToolBar, 2);
+      }
+    }
+
+    {
+      auto* rightToolBar = new QToolBar(contentWidget);
+      contentLayout->addWidget(rightToolBar);
+      rightToolBar->setOrientation(Qt::Orientation::Vertical);
+      rightToolBar->setAllowedAreas(Qt::ToolBarArea::RightToolBarArea);
+      addToolBarIcon(rightToolBar, 3);
+    }
+  }
+
   void setupShortcuts() {
     auto* enableShortcut = new QShortcut(Qt::CTRL | Qt::Key_E, &owner);
     enableShortcut->setAutoRepeat(false);
@@ -681,6 +763,53 @@ struct SandboxWindow::Impl {
 
       windowContentLayout->addWidget(combobox);
     }
+  }
+
+  void setupUI_comboBoxWithTreeView() {
+    auto* combobox = new QComboBox(windowContent);
+    combobox->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+
+    {
+      auto* treeWidget = new QTreeWidget(windowContent);
+      treeWidget->setMinimumSize(100, 200);
+      treeWidget->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Expanding);
+      treeWidget->setAlternatingRowColors(false);
+      treeWidget->setColumnCount(1);
+      treeWidget->setHeaderHidden(true);
+      treeWidget->setSelectionBehavior(QAbstractItemView::SelectRows);
+
+      for (auto i = 0; i < 3; ++i) {
+        auto* root = new QTreeWidgetItem(treeWidget);
+        root->setText(0, QString("Root %1").arg(i + 1));
+        root->setIcon(0, getTestQIcon({ 16, 16 }));
+        root->setText(1, QString("Column 2 of Root %1").arg(i + 1));
+
+        for (auto j = 0; j < 3; ++j) {
+          auto* child = new QTreeWidgetItem(root);
+          child->setText(0, QString("Child %1 of Root %2").arg(j).arg(i));
+          child->setIcon(0, getTestQIcon({ 16, 16 }));
+          child->setText(1, QString("Column 2 of Child %1 of Root %2").arg(j).arg(i));
+
+          for (auto k = 0; k < 3; ++k) {
+            auto* subChild = new QTreeWidgetItem(child);
+            subChild->setText(0, QString("Child %1 of Child %2 of Root %3").arg(k).arg(j).arg(i));
+            subChild->setIcon(0, getTestQIcon({ 16, 16 }));
+            subChild->setText(1, QString("Column 2 of Child %1 of Child %2 of Root %3").arg(k).arg(j).arg(i));
+          }
+        }
+      }
+
+      treeWidget->topLevelItem(0)->setSelected(true);
+
+      combobox->setModel(treeWidget->model());
+
+      QTimer::singleShot(300, combobox, [combobox, treeWidget]() {
+        combobox->setView(treeWidget);
+      });
+      //combobox->setView(treeWidget);
+    }
+
+    windowContentLayout->addWidget(combobox);
   }
 
   void setupUI_fontComboBox() {
@@ -1742,6 +1871,7 @@ SandboxWindow::SandboxWindow(ThemeManager* themeManager, QWidget* parent)
     // _impl->setupUI_spinBox();
     // _impl->setupUI_comboBox();
     // _impl->setupUI_comboBoxVariants();
+    // _impl->setupUI_comboBoxWithTreeView();
     // _impl->setupUI_fontComboBox();
     // _impl->setupUI_listView();
     // _impl->setupUI_treeWidget();
@@ -1774,6 +1904,7 @@ SandboxWindow::SandboxWindow(ThemeManager* themeManager, QWidget* parent)
     // _impl->setupUI_blur();
     // _impl->setupUI_themeEditor();
     // _impl->setupUI_messageBox();
+    // _impl->setupUI_toolBar();
   }
   _impl->endSetupUI();
   oclero::qlementine::centerWidget(this);
