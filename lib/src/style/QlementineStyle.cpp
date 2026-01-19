@@ -1645,28 +1645,27 @@ void QlementineStyle::drawControl(ControlElement ce, const QStyleOption* opt, QP
                         const auto pixmapH = colorizedPixmap.height() / colorizedPixmap.devicePixelRatio();
 
                         if (buttonStyle == Qt::ToolButtonTextUnderIcon && hasText) {
-                          // Layout vertically
-                          const auto totalH = pixmapH + spacing + fm.height();
-                          const auto pixmapX = rect.x() + (rect.width() - pixmapW) / 2;
-                          const auto pixmapY = rect.y() + (rect.height() - totalH) / 2;
-                          const auto pixmapRect = QRect{
-                              static_cast<int>(pixmapX),
-                              static_cast<int>(pixmapY),
-                              static_cast<int>(pixmapW),
-                              static_cast<int>(pixmapH)
-                          };
-                          
-                          const auto& text = optToolButton->text;
-                          const auto textRect = QRect{
-                              rect.x(), pixmapRect.bottom() + spacing,
-                              rect.width(), rect.bottom() - (pixmapRect.bottom() + spacing)
-                          };
-                          
+                          const int textFlags =
+                            Qt::AlignHCenter | Qt::AlignTop | Qt::TextWordWrap | Qt::TextHideMnemonic;
+                          const QString& text = optToolButton->text; // Reference to avoid copy
+
+                          const QRect textBound = fm.boundingRect(rect, textFlags, text);
+                          const int textHeight = textBound.height();
+
+                          const int totalH = static_cast<int>(pixmapH) + spacing + textHeight;
+
+                          const int contentY = rect.y() + (rect.height() - totalH) / 2;
+
+                          const int pixmapX = rect.x() + static_cast<int>(rect.width() - pixmapW) / 2;
+                          const QRect pixmapRect(
+                            pixmapX, contentY, static_cast<int>(pixmapW), static_cast<int>(pixmapH));
+
+                          const QRect textRect(rect.x(), pixmapRect.bottom() + spacing, rect.width(), textHeight);
+
                           p->drawPixmap(pixmapRect, colorizedPixmap);
                           p->setPen(fgColor);
-                          p->drawText(textRect, Qt::AlignHCenter | Qt::AlignTop | Qt::TextWordWrap | Qt::TextHideMnemonic, text);
-
-                        } else {
+                          p->drawText(textRect, textFlags, text);
+                        }else {
                             // Default icon beside text layout
                             const auto pixmapX = availableX + (availableW - pixmapW) / 2;
                             const auto pixmapY = rect.y() + (rect.height() - pixmapH) / 2;
